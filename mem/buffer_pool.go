@@ -93,15 +93,16 @@ func (p *tieredBufferPool) Put(buf *[]byte) {
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
-	poolIdx := sort.Search(len(p.sizedPools), func(i int) bool {
-		return p.sizedPools[i].defaultSize >= size
-	})
-
-	if poolIdx == len(p.sizedPools) {
-		return &p.fallbackPool
+	// Use linear search instead of binary search for better performance
+	// Since we have more pool sizes now, linear search is often faster for small arrays
+	for _, pool := range p.sizedPools {
+		if pool.defaultSize >= size {
+			return pool
+		}
 	}
 
-	return p.sizedPools[poolIdx]
+	// If no pool can accommodate the size, use fallback
+	return &p.fallbackPool
 }
 
 // sizedBufferPool is a BufferPool implementation that is optimized for specific
