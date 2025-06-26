@@ -94,18 +94,12 @@ func (p *tieredBufferPool) Put(buf *[]byte) {
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
 	// Use if-else checks instead of loop for better performance
-	if size <= 256 {
-		return p.sizedPools[0]
-	} else if size <= 4<<10 {
-		return p.sizedPools[1]
-	} else if size <= 16<<10 {
-		return p.sizedPools[2]
-	} else if size <= 32<<10 {
-		return p.sizedPools[3]
-	} else {
-		// If no pool can accommodate the size, use fallback
-		return &p.fallbackPool
+	for idx := range len(defaultBufferPoolSizes) {
+		if size <= defaultBufferPoolSizes[idx] {
+			return p.sizedPools[idx]
+		}
 	}
+	return &p.fallbackPool
 }
 
 // sizedBufferPool is a BufferPool implementation that is optimized for specific
