@@ -18,7 +18,6 @@ package mem
 
 import (
 	"sort"
-	"sync"
 	"sync/atomic"
 )
 
@@ -141,41 +140,6 @@ func (p *OptimizedBufferPool) GetStats() (hits, misses uint64) {
 	return p.stats.hits.Load(), p.stats.misses.Load()
 }
 
-// AdaptiveBufferPool automatically adjusts buffer sizes based on usage patterns
-type AdaptiveBufferPool struct {
-	*OptimizedBufferPool
-	usageStats map[int]uint64
-	mu         sync.RWMutex
-}
-
-func NewAdaptiveBufferPool() *AdaptiveBufferPool {
-	return &AdaptiveBufferPool{
-		OptimizedBufferPool: NewOptimizedBufferPool(),
-		usageStats:          make(map[int]uint64),
-	}
-}
-
-func (p *AdaptiveBufferPool) Get(size int) *[]byte {
-	// Track usage patterns
-	p.mu.Lock()
-	p.usageStats[size]++
-	p.mu.Unlock()
-
-	return p.OptimizedBufferPool.Get(size)
-}
-
-// GetUsageStats returns the most commonly requested buffer sizes
-func (p *AdaptiveBufferPool) GetUsageStats() map[int]uint64 {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	result := make(map[int]uint64)
-	for size, count := range p.usageStats {
-		result[size] = count
-	}
-	return result
-}
-
 // OptimizedBufferPoolConfig allows custom configuration of the optimized buffer pool
 type OptimizedBufferPoolConfig struct {
 	// Workload-specific buffer sizes (defaults to optimized sizes if not specified)
@@ -183,9 +147,6 @@ type OptimizedBufferPoolConfig struct {
 
 	// Pre-warm pools with this many buffers per size
 	PreWarmCount int
-
-	// Enable adaptive sizing based on usage patterns
-	EnableAdaptiveSizing bool
 
 	// Enable statistics collection
 	EnableStats bool
