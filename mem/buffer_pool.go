@@ -94,10 +94,14 @@ func (p *tieredBufferPool) Put(buf *[]byte) {
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
 	// Use if-else checks instead of loop for better performance
-	for idx := range len(defaultBufferPoolSizes) {
-		if size <= defaultBufferPoolSizes[idx] {
-			return p.sizedPools[idx]
-		}
+	if size <= defaultBufferPoolSizes[0] {
+		return p.sizedPools[0]
+	} else if size <= defaultBufferPoolSizes[1] {
+		return p.sizedPools[1]
+	} else if size <= defaultBufferPoolSizes[2] {
+		return p.sizedPools[2]
+	} else if size <= defaultBufferPoolSizes[3] {
+		return p.sizedPools[3]
 	}
 	return &p.fallbackPool
 }
