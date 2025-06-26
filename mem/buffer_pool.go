@@ -46,7 +46,8 @@ var defaultBufferPoolSizes = []int{
 var defaultBufferPool BufferPool
 
 func init() {
-	defaultBufferPool = NewTieredBufferPool(defaultBufferPoolSizes...)
+	// Use our optimized buffer pool by default for better QPS performance
+	defaultBufferPool = NewOptimizedBufferPool()
 
 	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) {
 		defaultBufferPool = pool
@@ -62,6 +63,13 @@ func init() {
 // expected workflows.
 func DefaultBufferPool() BufferPool {
 	return defaultBufferPool
+}
+
+// UseOriginalBufferPool switches back to the original tiered buffer pool implementation.
+// This can be useful for compatibility or if the optimized pool doesn't work well
+// for a specific use case.
+func UseOriginalBufferPool() {
+	defaultBufferPool = NewTieredBufferPool(defaultBufferPoolSizes...)
 }
 
 // NewTieredBufferPool returns a BufferPool implementation that uses multiple
