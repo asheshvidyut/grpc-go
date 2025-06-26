@@ -85,22 +85,47 @@ type tieredBufferPool struct {
 }
 
 func (p *tieredBufferPool) Get(size int) *[]byte {
-	return p.getPool(size).Get(size)
+	// Fast path for common sizes to avoid getPool lookup
+	switch size {
+	case 256:
+		return p.sizedPools[0].Get(size)
+	case 4096:
+		return p.sizedPools[1].Get(size)
+	case 16384:
+		return p.sizedPools[2].Get(size)
+	case 32768:
+		return p.sizedPools[3].Get(size)
+	default:
+		return p.getPool(size).Get(size)
+	}
 }
 
 func (p *tieredBufferPool) Put(buf *[]byte) {
-	p.getPool(cap(*buf)).Put(buf)
+	capacity := cap(*buf)
+	// Fast path for common sizes to avoid getPool lookup
+	switch capacity {
+	case 256:
+		p.sizedPools[0].Put(buf)
+	case 4096:
+		p.sizedPools[1].Put(buf)
+	case 16384:
+		p.sizedPools[2].Put(buf)
+	case 32768:
+		p.sizedPools[3].Put(buf)
+	default:
+		p.getPool(capacity).Put(buf)
+	}
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
-	// Use if-else checks instead of loop for better performance
-	if size <= defaultBufferPoolSizes[0] {
+	// Use constants instead of array lookups for better performance
+	if size <= 256 {
 		return p.sizedPools[0]
-	} else if size <= defaultBufferPoolSizes[1] {
+	} else if size <= 4096 {
 		return p.sizedPools[1]
-	} else if size <= defaultBufferPoolSizes[2] {
+	} else if size <= 16384 {
 		return p.sizedPools[2]
-	} else if size <= defaultBufferPoolSizes[3] {
+	} else if size <= 32768 {
 		return p.sizedPools[3]
 	}
 	return &p.fallbackPool
