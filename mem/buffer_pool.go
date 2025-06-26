@@ -85,6 +85,11 @@ type tieredBufferPool struct {
 }
 
 func (p *tieredBufferPool) Get(size int) *[]byte {
+	// Early return for large sizes
+	if size > 32768 {
+		return p.fallbackPool.Get(size)
+	}
+
 	// Fast path for common sizes to avoid getPool lookup
 	switch size {
 	case 256:
@@ -102,6 +107,12 @@ func (p *tieredBufferPool) Get(size int) *[]byte {
 
 func (p *tieredBufferPool) Put(buf *[]byte) {
 	capacity := cap(*buf)
+	// Early return for large sizes
+	if capacity > 32768 {
+		p.fallbackPool.Put(buf)
+		return
+	}
+
 	// Fast path for common sizes to avoid getPool lookup
 	switch capacity {
 	case 256:
