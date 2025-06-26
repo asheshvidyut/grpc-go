@@ -17,6 +17,7 @@
 package mem
 
 import (
+	"math/bits"
 	"sort"
 )
 
@@ -102,12 +103,38 @@ func (p *OptimizedBufferPool) Put(buf *[]byte) {
 	p.fallbackPool.Put(buf)
 }
 
+// PowerOfTwoIndexGE returns the index of the smallest power of 2 >= n
+func PowerOfTwoIndexGE(n int) int {
+	if n <= 0 {
+		return -1
+	}
+	return bits.Len(uint(n - 1))
+}
+
 // selectPoolFast uses bit manipulation for faster pool selection
 func (p *OptimizedBufferPool) selectPoolFast(size int) uint32 {
-	// Fast bit manipulation for power-of-2 sizes
-	// Shift right by 10 bits and mask to get pool index
-	// This is much faster than multiple if-else statements
-	return (uint32(size) >> 10) & p.fastMask
+	// Use PowerOfTwoIndexGE to find the smallest pool >= size
+	// Pool sizes: 1024(2^10), 2048(2^11), 4096(2^12), 8192(2^13), 16384(2^14), 32768(2^15), 65536(2^16), 131072(2^17)
+
+	if size <= 0 {
+		return 8 // fallback
+	}
+
+	// Find the power of 2 index for the requested size
+	powerIndex := PowerOfTwoIndexGE(size)
+
+	// Calculate pool index: powerIndex - 10
+	// For size 1024: powerIndex = 10, poolIdx = 0
+	// For size 2048: powerIndex = 11, poolIdx = 1
+	// For size 16384: powerIndex = 14, poolIdx = 4
+	poolIdx := uint32(powerIndex) - 10
+
+	// Ensure we don't return an invalid index
+	if poolIdx >= 8 {
+		return 8 // fallback
+	}
+
+	return poolIdx
 }
 
 // OptimizedBufferPoolConfig allows custom configuration of the optimized buffer pool
