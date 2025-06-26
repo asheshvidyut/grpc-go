@@ -36,7 +36,7 @@ var optimizedBufferSizes = []int{
 // 1. Workload-specific buffer sizes
 // 2. Reduced pool selection overhead
 // 3. Better cache locality
-// 4. Adaptive sizing based on usage patterns
+// 4. Fast path for common sizes
 type OptimizedBufferPool struct {
 	// Fast path for common sizes (avoid binary search)
 	fastPools [8]*sizedBufferPool
@@ -44,27 +44,21 @@ type OptimizedBufferPool struct {
 
 	// Fallback for larger sizes
 	fallbackPool simpleBufferPool
-
-	// Statistics for adaptive optimization
-	stats struct {
-		hits   atomic.Uint64
-		misses atomic.Uint64
-	}
 }
 
 // NewOptimizedBufferPool creates a buffer pool optimized for high QPS workloads
 func NewOptimizedBufferPool() *OptimizedBufferPool {
 	pool := &OptimizedBufferPool{}
 
-	// Optimize for common gRPC message sizes
+	// Optimize for common gRPC message sizes, with better coverage for 64KB
 	commonSizes := []int{
-		256,     // Small metadata
 		1024,    // Small messages
 		4096,    // Page size
 		16384,   // HTTP/2 frame size
 		32768,   // Default buffer size
-		65536,   // Medium messages
+		65536,   // Medium messages (your test case)
 		131072,  // Large messages
+		262144,  // Very large messages
 		1048576, // 1MB
 	}
 
@@ -89,7 +83,6 @@ func (p *OptimizedBufferPool) Get(size int) *[]byte {
 	}
 
 	// Fallback for larger sizes
-	p.stats.misses.Add(1)
 	return p.fallbackPool.Get(size)
 }
 
@@ -101,7 +94,6 @@ func (p *OptimizedBufferPool) Put(buf *[]byte) {
 		poolIdx := p.selectPoolFast(capacity)
 		if poolIdx < 8 {
 			p.fastPools[poolIdx].Put(buf)
-			p.stats.hits.Add(1)
 			return
 		}
 	}
@@ -110,34 +102,34 @@ func (p *OptimizedBufferPool) Put(buf *[]byte) {
 	p.fallbackPool.Put(buf)
 }
 
-// selectPoolFast uses bit manipulation for faster pool selection
+// selectPoolFast uses optimized logic for faster pool selection
 func (p *OptimizedBufferPool) selectPoolFast(size int) uint32 {
-	// Use bit shifting for faster size classification
-	switch {
-	case size <= 256:
+	// Optimized for common sizes with minimal branching
+	if size <= 1024 {
 		return 0
-	case size <= 1024:
-		return 1
-	case size <= 4096:
-		return 2
-	case size <= 16384:
-		return 3
-	case size <= 32768:
-		return 4
-	case size <= 65536:
-		return 5
-	case size <= 131072:
-		return 6
-	case size <= 1048576:
-		return 7
-	default:
-		return 8 // Use fallback
 	}
-}
-
-// GetStats returns pool usage statistics
-func (p *OptimizedBufferPool) GetStats() (hits, misses uint64) {
-	return p.stats.hits.Load(), p.stats.misses.Load()
+	if size <= 4096 {
+		return 1
+	}
+	if size <= 16384 {
+		return 2
+	}
+	if size <= 32768 {
+		return 3
+	}
+	if size <= 65536 {
+		return 4
+	}
+	if size <= 131072 {
+		return 5
+	}
+	if size <= 262144 {
+		return 6
+	}
+	if size <= 1048576 {
+		return 7
+	}
+	return 8 // Use fallback
 }
 
 // OptimizedBufferPoolConfig allows custom configuration of the optimized buffer pool
