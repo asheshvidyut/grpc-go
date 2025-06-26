@@ -18,7 +18,6 @@ package mem
 
 import (
 	"sort"
-	"sync/atomic"
 )
 
 // Optimized buffer sizes tuned for common gRPC workloads
@@ -118,9 +117,6 @@ type OptimizedBufferPoolConfig struct {
 
 	// Pre-warm pools with this many buffers per size
 	PreWarmCount int
-
-	// Enable statistics collection
-	EnableStats bool
 }
 
 // NewOptimizedBufferPoolWithConfig creates an optimized buffer pool with custom configuration
@@ -162,10 +158,6 @@ type optimizedBufferPool struct {
 	sizedPools   []*sizedBufferPool
 	fallbackPool simpleBufferPool
 	config       OptimizedBufferPoolConfig
-	stats        struct {
-		hits   atomic.Uint64
-		misses atomic.Uint64
-	}
 }
 
 // Get returns a buffer with the specified length from the optimized pool
@@ -175,15 +167,6 @@ func (p *optimizedBufferPool) Get(length int) *[]byte {
 
 	// Try to get from the pool
 	buf := pool.Get(length)
-
-	// Update statistics if enabled
-	if p.config.EnableStats {
-		if pool == &p.fallbackPool {
-			p.stats.misses.Add(1)
-		} else {
-			p.stats.hits.Add(1)
-		}
-	}
 
 	return buf
 }
