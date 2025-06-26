@@ -36,11 +36,19 @@ type BufferPool interface {
 }
 
 var defaultBufferPoolSizes = []int{
-	256,
-	4 << 10,  // 4KB (go page size)
-	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
-	32 << 10, // 32KB (default buffer size for io.Copy)
-	1 << 20,  // 1MB
+	256,     // Small messages
+	512,     // Small-medium messages
+	1024,    // 1KB
+	2048,    // 2KB
+	4096,    // 4KB (go page size)
+	8192,    // 8KB
+	16384,   // 16KB (max HTTP/2 frame size used by gRPC)
+	32768,   // 32KB (default buffer size for io.Copy)
+	65536,   // 64KB
+	131072,  // 128KB
+	262144,  // 256KB
+	524288,  // 512KB
+	1048576, // 1MB
 }
 
 var defaultBufferPool BufferPool
