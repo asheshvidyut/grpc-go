@@ -50,16 +50,16 @@ type OptimizedBufferPool struct {
 func NewOptimizedBufferPool() *OptimizedBufferPool {
 	pool := &OptimizedBufferPool{}
 
-	// Optimize for common gRPC message sizes, with better coverage for 64KB
+	// Optimize for common gRPC message sizes using powers of 2 for bit manipulation
 	commonSizes := []int{
-		1024,    // Small messages
-		4096,    // Page size
-		16384,   // HTTP/2 frame size
-		32768,   // Default buffer size
-		65536,   // Medium messages (your test case)
-		131072,  // Large messages
-		262144,  // Very large messages
-		1048576, // 1MB
+		1024,   // 2^10 - Small messages
+		2048,   // 2^11 - Small-medium messages
+		4096,   // 2^12 - Page size
+		8192,   // 2^13 - Medium messages
+		16384,  // 2^14 - HTTP/2 frame size
+		32768,  // 2^15 - Default buffer size
+		65536,  // 2^16 - Medium-large messages
+		131072, // 2^17 - Large messages
 	}
 
 	for i, size := range commonSizes {
@@ -67,6 +67,7 @@ func NewOptimizedBufferPool() *OptimizedBufferPool {
 	}
 
 	// Use bit manipulation for fast size selection
+	// fastMask = 7 (binary: 111) for 8 pools (indices 0-7)
 	pool.fastMask = 7 // 2^3 - 1 for 8 pools
 
 	return pool
@@ -74,8 +75,8 @@ func NewOptimizedBufferPool() *OptimizedBufferPool {
 
 func (p *OptimizedBufferPool) Get(size int) *[]byte {
 	// Fast path: try to use one of the common sizes
-	if size <= 1048576 { // 1MB
-		// Use bit manipulation instead of binary search
+	if size <= 131072 { // 2^17
+		// Use bit manipulation for faster pool selection
 		poolIdx := p.selectPoolFast(size)
 		if poolIdx < 8 {
 			return p.fastPools[poolIdx].Get(size)
@@ -90,7 +91,7 @@ func (p *OptimizedBufferPool) Put(buf *[]byte) {
 	capacity := cap(*buf)
 
 	// Fast path for common sizes
-	if capacity <= 1048576 {
+	if capacity <= 131072 { // 2^17
 		poolIdx := p.selectPoolFast(capacity)
 		if poolIdx < 8 {
 			p.fastPools[poolIdx].Put(buf)
@@ -102,34 +103,12 @@ func (p *OptimizedBufferPool) Put(buf *[]byte) {
 	p.fallbackPool.Put(buf)
 }
 
-// selectPoolFast uses optimized logic for faster pool selection
+// selectPoolFast uses bit manipulation for faster pool selection
 func (p *OptimizedBufferPool) selectPoolFast(size int) uint32 {
-	// Optimized for common sizes with minimal branching
-	if size <= 1024 {
-		return 0
-	}
-	if size <= 4096 {
-		return 1
-	}
-	if size <= 16384 {
-		return 2
-	}
-	if size <= 32768 {
-		return 3
-	}
-	if size <= 65536 {
-		return 4
-	}
-	if size <= 131072 {
-		return 5
-	}
-	if size <= 262144 {
-		return 6
-	}
-	if size <= 1048576 {
-		return 7
-	}
-	return 8 // Use fallback
+	// Fast bit manipulation for power-of-2 sizes
+	// Shift right by 10 bits and mask to get pool index
+	// This is much faster than multiple if-else statements
+	return (uint32(size) >> 10) & p.fastMask
 }
 
 // OptimizedBufferPoolConfig allows custom configuration of the optimized buffer pool
