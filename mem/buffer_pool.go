@@ -36,19 +36,11 @@ type BufferPool interface {
 }
 
 var defaultBufferPoolSizes = []int{
-	256,     // Small messages
-	512,     // Small-medium messages
-	1024,    // 1KB
-	2048,    // 2KB
-	4096,    // 4KB (go page size)
-	8192,    // 8KB
-	16384,   // 16KB (max HTTP/2 frame size used by gRPC)
-	32768,   // 32KB (default buffer size for io.Copy)
-	65536,   // 64KB
-	131072,  // 128KB
-	262144,  // 256KB
-	524288,  // 512KB
-	1048576, // 1MB
+	256,
+	4 << 10,  // 4KB (go page size)
+	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
+	32 << 10, // 32KB (default buffer size for io.Copy)
+	1 << 20,  // 1MB
 }
 
 var defaultBufferPool BufferPool
@@ -101,16 +93,19 @@ func (p *tieredBufferPool) Put(buf *[]byte) {
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
-	// Use linear search instead of binary search for better performance
-	// Since we have more pool sizes now, linear search is often faster for small arrays
-	for _, pool := range p.sizedPools {
-		if pool.defaultSize >= size {
-			return pool
-		}
+	// Use if-else checks instead of loop for better performance
+	if size <= 256 {
+		return p.sizedPools[0]
+	} else if size <= 4<<10 {
+		return p.sizedPools[1]
+	} else if size <= 16<<10 {
+		return p.sizedPools[2]
+	} else if size <= 32<<10 {
+		return p.sizedPools[3]
+	} else {
+		// If no pool can accommodate the size, use fallback
+		return &p.fallbackPool
 	}
-
-	// If no pool can accommodate the size, use fallback
-	return &p.fallbackPool
 }
 
 // sizedBufferPool is a BufferPool implementation that is optimized for specific
