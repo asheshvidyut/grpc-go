@@ -133,7 +133,7 @@ func (s) TestEnhancedRadixTreeWRRNext(t *testing.T) {
 }
 
 func (s) TestBenchmarkRadixTreeWRRNext(t *testing.T) {
-	testWRRNext(t, NewBenchmarkRadixTreeWRR)
+	testWRRNext(t, NewBenchmarkOptimizedRadixTreeWRR)
 }
 
 func (s) TestIteratorRadixTreeWRRNext(t *testing.T) {
@@ -348,7 +348,7 @@ func BenchmarkComparison(b *testing.B) {
 		{"EDF", NewEDF},
 		{"RadixTree", NewRadixTreeWRR},
 		{"EnhancedRadixTree", NewEnhancedRadixTreeWRR},
-		{"BenchmarkRadixTree", NewBenchmarkRadixTreeWRR},
+		{"BenchmarkOptimizedRadixTree", NewBenchmarkOptimizedRadixTreeWRR},
 		{"IteratorRadixTree", NewIteratorRadixTreeWRR},
 		{"AdvancedIteratorRadixTree", NewAdvancedIteratorRadixTreeWRR},
 	}
@@ -385,7 +385,7 @@ func BenchmarkComparison(b *testing.B) {
 func BenchmarkBenchmarkRadixTreeWRRNext(b *testing.B) {
 	for _, n := range []int{100, 500, 1000} {
 		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
-			w := NewBenchmarkRadixTreeWRR()
+			w := NewBenchmarkOptimizedRadixTreeWRR()
 			sumOfWeights := n
 			for i := 0; i < n; i++ {
 				w.Add(i, 1)
@@ -402,7 +402,7 @@ func BenchmarkBenchmarkRadixTreeWRRNext(b *testing.B) {
 	var maxWeight int64 = 1024
 	for _, n := range []int{100, 500, 1000} {
 		b.Run("random-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
-			w := NewBenchmarkRadixTreeWRR()
+			w := NewBenchmarkOptimizedRadixTreeWRR()
 			var sumOfWeights int64
 			for i := 0; i < n; i++ {
 				weight := rand.Int64N(maxWeight + 1)
@@ -424,7 +424,7 @@ func BenchmarkBenchmarkRadixTreeWRRNext(b *testing.B) {
 	heavyIndices := []int{0, itemsNum / 2, itemsNum - 1}
 	for _, heavyIndex := range heavyIndices {
 		b.Run("skew-weights-heavy-index-"+strconv.Itoa(heavyIndex), func(b *testing.B) {
-			w := NewBenchmarkRadixTreeWRR()
+			w := NewBenchmarkOptimizedRadixTreeWRR()
 			var sumOfWeights int64
 			for i := 0; i < itemsNum; i++ {
 				var weight int64

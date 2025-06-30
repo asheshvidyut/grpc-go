@@ -21,7 +21,6 @@ package wrr
 import (
 	"fmt"
 	rand "math/rand/v2"
-	"strconv"
 	"sync"
 
 	"github.com/asheshvidyut/prefix-search-optimized-radix/radix"
@@ -106,14 +105,22 @@ func (rw *radixTreeWRR) findByWeight(targetWeight int64) any {
 	// For now, we'll iterate through the weight map
 	for key, weight := range rw.weightMap {
 		if currentWeight <= targetWeight && targetWeight < currentWeight+weight {
-			// Return the original item by parsing the key back to int
-			// This is a simplified approach - in practice you'd want a better mapping
-			if item, err := strconv.Atoi(key); err == nil {
+			// Return the original item from the item map
+			item := rw.itemMap[key]
+			if item != nil {
 				return item
 			}
-			return key
 		}
 		currentWeight += weight
+	}
+
+	// Fallback: if we didn't find anything, return the first item
+	if len(rw.itemMap) > 0 {
+		for _, item := range rw.itemMap {
+			if item != nil {
+				return item
+			}
+		}
 	}
 
 	return nil
@@ -215,8 +222,7 @@ func (rw *enhancedRadixTreeWRR) Next() any {
 	}
 
 	if rw.equalWeights {
-		key := rw.items[rand.IntN(len(rw.items))].(string)
-		return rw.itemMap[key]
+		return rw.items[rand.IntN(len(rw.items))]
 	}
 
 	// Use external radix tree for weighted selection
@@ -234,10 +240,22 @@ func (rw *enhancedRadixTreeWRR) findByWeightWithRadixTree(targetWeight int64) an
 		// Verify the key exists in the radix tree using Get method
 		if _, found := rw.tree.Get([]byte(key)); found {
 			if currentWeight <= targetWeight && targetWeight < currentWeight+weight {
-				return rw.itemMap[key]
+				item := rw.itemMap[key]
+				if item != nil {
+					return item
+				}
 			}
 		}
 		currentWeight += weight
+	}
+
+	// Fallback: if we didn't find anything, return the first item
+	if len(rw.itemMap) > 0 {
+		for _, item := range rw.itemMap {
+			if item != nil {
+				return item
+			}
+		}
 	}
 
 	return nil
@@ -499,15 +517,6 @@ func (rw *iteratorRadixTreeWRR) findByWeightWithIterator(targetWeight int64) any
 	// Use the existing radix tree iterator
 	iterator := rw.tree.Root().Iterator()
 
-	// Use SeekPrefix to optimize the search if we have a target range
-	// For weighted selection, we can use SeekPrefix to jump to specific weight ranges
-	if targetWeight > rw.totalWeight/2 {
-		// If target is in the second half, seek to middle
-		midKey := fmt.Sprintf("%d", rw.totalWeight/2)
-		iterator.SeekPrefix([]byte(midKey))
-		currentWeight = rw.totalWeight / 2
-	}
-
 	// Use the iterator's Next() method to traverse the tree
 	for {
 		keyBytes, _, more := iterator.Next()
@@ -522,9 +531,21 @@ func (rw *iteratorRadixTreeWRR) findByWeightWithIterator(targetWeight int64) any
 		}
 
 		if currentWeight <= targetWeight && targetWeight < currentWeight+weight {
-			return rw.itemMap[key]
+			item := rw.itemMap[key]
+			if item != nil {
+				return item
+			}
 		}
 		currentWeight += weight
+	}
+
+	// Fallback: if we didn't find anything, return the first item
+	if len(rw.itemMap) > 0 {
+		for _, item := range rw.itemMap {
+			if item != nil {
+				return item
+			}
+		}
 	}
 
 	return nil
@@ -648,27 +669,8 @@ func (rw *advancedIteratorRadixTreeWRR) Next() any {
 func (rw *advancedIteratorRadixTreeWRR) findByWeightWithAdvancedIterator(targetWeight int64) any {
 	var currentWeight int64
 
-	// Use the existing radix tree iterator with seek functionality
+	// Use the existing radix tree iterator for traversal
 	iterator := rw.tree.Root().Iterator()
-
-	// Use SeekPrefix for optimized traversal based on weight distribution
-	// This is more efficient than linear traversal for large datasets
-	if targetWeight > rw.totalWeight*3/4 {
-		// Seek to 75% mark for high weight targets
-		seekKey := fmt.Sprintf("%d", rw.totalWeight*3/4)
-		iterator.SeekPrefix([]byte(seekKey))
-		currentWeight = rw.totalWeight * 3 / 4
-	} else if targetWeight > rw.totalWeight/2 {
-		// Seek to 50% mark for medium-high weight targets
-		seekKey := fmt.Sprintf("%d", rw.totalWeight/2)
-		iterator.SeekPrefix([]byte(seekKey))
-		currentWeight = rw.totalWeight / 2
-	} else if targetWeight > rw.totalWeight/4 {
-		// Seek to 25% mark for medium-low weight targets
-		seekKey := fmt.Sprintf("%d", rw.totalWeight/4)
-		iterator.SeekPrefix([]byte(seekKey))
-		currentWeight = rw.totalWeight / 4
-	}
 
 	// Use the iterator's Next() method for efficient traversal
 	for {
@@ -684,9 +686,21 @@ func (rw *advancedIteratorRadixTreeWRR) findByWeightWithAdvancedIterator(targetW
 		}
 
 		if currentWeight <= targetWeight && targetWeight < currentWeight+weight {
-			return rw.itemMap[key]
+			item := rw.itemMap[key]
+			if item != nil {
+				return item
+			}
 		}
 		currentWeight += weight
+	}
+
+	// Fallback: if we didn't find anything, return the first item
+	if len(rw.itemMap) > 0 {
+		for _, item := range rw.itemMap {
+			if item != nil {
+				return item
+			}
+		}
 	}
 
 	return nil
