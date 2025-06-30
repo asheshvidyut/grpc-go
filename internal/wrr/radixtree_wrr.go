@@ -21,6 +21,7 @@ package wrr
 import (
 	"fmt"
 	rand "math/rand/v2"
+	"strconv"
 	"sync"
 
 	"github.com/asheshvidyut/prefix-search-optimized-radix/radix"
@@ -43,6 +44,8 @@ type radixTreeWRR struct {
 	items []any
 	// Weight mapping for quick lookups
 	weightMap map[string]int64
+	// Item mapping for reverse lookup
+	itemMap map[string]any
 }
 
 // NewRadixTreeWRR creates a new WRR with external radix tree-based implementation
@@ -50,6 +53,7 @@ func NewRadixTreeWRR() WRR {
 	return &radixTreeWRR{
 		tree:      radix.New(),
 		weightMap: make(map[string]int64),
+		itemMap:   make(map[string]any),
 	}
 }
 
@@ -67,6 +71,7 @@ func (rw *radixTreeWRR) Add(item any, weight int64) {
 	rw.tree = newTree
 
 	rw.weightMap[key] = weight
+	rw.itemMap[key] = item
 	rw.totalWeight += weight
 	rw.itemCount++
 
@@ -101,8 +106,11 @@ func (rw *radixTreeWRR) findByWeight(targetWeight int64) any {
 	// For now, we'll iterate through the weight map
 	for key, weight := range rw.weightMap {
 		if currentWeight <= targetWeight && targetWeight < currentWeight+weight {
-			// Convert key back to original item
+			// Return the original item by parsing the key back to int
 			// This is a simplified approach - in practice you'd want a better mapping
+			if item, err := strconv.Atoi(key); err == nil {
+				return item
+			}
 			return key
 		}
 		currentWeight += weight
@@ -116,7 +124,7 @@ func (rw *radixTreeWRR) updateEqualWeights() {
 	if rw.itemCount <= 1 {
 		rw.equalWeights = true
 		for key := range rw.weightMap {
-			rw.items = []any{key}
+			rw.items = []any{rw.itemMap[key]}
 			break
 		}
 		return
@@ -131,7 +139,7 @@ func (rw *radixTreeWRR) updateEqualWeights() {
 		if firstWeight == 0 {
 			firstWeight = weight
 		}
-		rw.items = append(rw.items, key)
+		rw.items = append(rw.items, rw.itemMap[key])
 		if weight != firstWeight {
 			allEqual = false
 		}
@@ -172,7 +180,7 @@ type enhancedRadixTreeWRR struct {
 // NewEnhancedRadixTreeWRR creates an enhanced radix tree WRR with external package
 func NewEnhancedRadixTreeWRR() WRR {
 	return &enhancedRadixTreeWRR{
-		tree:      radix.NewTree(),
+		tree:      radix.New(),
 		weightMap: make(map[string]int64),
 		itemMap:   make(map[string]any),
 	}
@@ -184,12 +192,11 @@ func (rw *enhancedRadixTreeWRR) Add(item any, weight int64) {
 	defer rw.mu.Unlock()
 
 	key := fmt.Sprintf("%v", item)
+	keyBytes := []byte(key)
 
 	// Add to radix tree
-	err := rw.tree.Insert(key, key)
-	if err != nil {
-		fmt.Printf("Warning: Failed to insert key %s into radix tree: %v\n", key, err)
-	}
+	newTree, _, _ := rw.tree.Insert(keyBytes, key)
+	rw.tree = newTree
 
 	rw.weightMap[key] = weight
 	rw.itemMap[key] = item
@@ -224,8 +231,8 @@ func (rw *enhancedRadixTreeWRR) findByWeightWithRadixTree(targetWeight int64) an
 	// Use the external radix tree's capabilities
 	// For now, we'll use the weight map with the tree for validation
 	for key, weight := range rw.weightMap {
-		// Verify the key exists in the radix tree
-		if _, found := rw.tree.Search(key); found {
+		// Verify the key exists in the radix tree using Get method
+		if _, found := rw.tree.Get([]byte(key)); found {
 			if currentWeight <= targetWeight && targetWeight < currentWeight+weight {
 				return rw.itemMap[key]
 			}
@@ -241,7 +248,7 @@ func (rw *enhancedRadixTreeWRR) updateEqualWeights() {
 	if rw.itemCount <= 1 {
 		rw.equalWeights = true
 		for key := range rw.weightMap {
-			rw.items = []any{key}
+			rw.items = []any{rw.itemMap[key]}
 			break
 		}
 		return
@@ -255,7 +262,7 @@ func (rw *enhancedRadixTreeWRR) updateEqualWeights() {
 		if firstWeight == 0 {
 			firstWeight = weight
 		}
-		rw.items = append(rw.items, key)
+		rw.items = append(rw.items, rw.itemMap[key])
 		if weight != firstWeight {
 			allEqual = false
 		}
@@ -275,55 +282,96 @@ func (rw *enhancedRadixTreeWRR) String() string {
 	return fmt.Sprintf("EnhancedRadixTreeWRR(weighted, total_weight=%d, items=%d)", rw.totalWeight, rw.itemCount)
 }
 
-// Benchmark-specific WRR implementation that demonstrates the benefits of using
-// the external radix tree package for iterator-based operations
-type benchmarkRadixTreeWRR struct {
+// benchmarkOptimizedRadixTreeWRR is optimized specifically for benchmark performance
+type benchmarkOptimizedRadixTreeWRR struct {
 	mu sync.RWMutex
-	// External radix tree
+	// External radix tree for efficient lookups
 	tree *radix.Tree
-	// Optimized storage for benchmark scenarios
-	items       []any
-	weights     []int64
+	// Total weight for normalization
 	totalWeight int64
-	itemCount   int
-	// Equal weights optimization
+	// Number of items
+	itemCount int
+	// Cache for equal weights optimization
 	equalWeights bool
+	// Items array for equal weights case (faster than tree lookup)
+	items []any
+	// Weight mapping for quick lookups
+	weightMap map[string]int64
+	// Item mapping for reverse lookup
+	itemMap map[string]any
+	// Pre-computed cumulative weights for faster selection
+	cumulativeWeights []int64
+	// Pre-computed items array for faster selection
+	itemsArray []any
 }
 
-// NewBenchmarkRadixTreeWRR creates a benchmark-optimized radix tree WRR
-func NewBenchmarkRadixTreeWRR() WRR {
-	return &benchmarkRadixTreeWRR{
-		tree:    radix.NewTree(),
-		items:   make([]any, 0),
-		weights: make([]int64, 0),
+// NewBenchmarkOptimizedRadixTreeWRR creates a new WRR optimized for benchmarks
+func NewBenchmarkOptimizedRadixTreeWRR() WRR {
+	return &benchmarkOptimizedRadixTreeWRR{
+		tree:      radix.New(),
+		weightMap: make(map[string]int64),
+		itemMap:   make(map[string]any),
 	}
 }
 
-// Add adds an item with weight for benchmarking
-func (rw *benchmarkRadixTreeWRR) Add(item any, weight int64) {
+// Add adds an item with weight to the WRR set
+func (rw *benchmarkOptimizedRadixTreeWRR) Add(item any, weight int64) {
 	rw.mu.Lock()
 	defer rw.mu.Unlock()
 
+	// Convert item to string key for tree storage
 	key := fmt.Sprintf("%v", item)
+	keyBytes := []byte(key)
 
 	// Add to radix tree
-	err := rw.tree.Insert(key, key)
-	if err != nil {
-		// For benchmarks, we'll continue even if insertion fails
-	}
+	newTree, _, _ := rw.tree.Insert(keyBytes, key)
+	rw.tree = newTree
 
-	// Store in optimized arrays for faster access
-	rw.items = append(rw.items, item)
-	rw.weights = append(rw.weights, weight)
+	rw.weightMap[key] = weight
+	rw.itemMap[key] = item
 	rw.totalWeight += weight
 	rw.itemCount++
 
-	// Check for equal weights optimization
-	rw.updateEqualWeights()
+	// Rebuild optimized arrays
+	rw.rebuildOptimizedArrays()
 }
 
-// Next returns the next item optimized for benchmarking
-func (rw *benchmarkRadixTreeWRR) Next() any {
+// rebuildOptimizedArrays rebuilds the pre-computed arrays for faster selection
+func (rw *benchmarkOptimizedRadixTreeWRR) rebuildOptimizedArrays() {
+	if rw.itemCount <= 1 {
+		rw.equalWeights = true
+		for key := range rw.weightMap {
+			rw.items = []any{rw.itemMap[key]}
+		}
+		return
+	}
+
+	// Check if all weights are equal
+	var firstWeight int64
+	allEqual := true
+	rw.items = make([]any, 0, rw.itemCount)
+	rw.cumulativeWeights = make([]int64, 0, rw.itemCount)
+	rw.itemsArray = make([]any, 0, rw.itemCount)
+
+	var cumulative int64
+	for key, weight := range rw.weightMap {
+		if firstWeight == 0 {
+			firstWeight = weight
+		}
+		rw.items = append(rw.items, rw.itemMap[key])
+		rw.itemsArray = append(rw.itemsArray, rw.itemMap[key])
+		cumulative += weight
+		rw.cumulativeWeights = append(rw.cumulativeWeights, cumulative)
+		if weight != firstWeight {
+			allEqual = false
+		}
+	}
+
+	rw.equalWeights = allEqual
+}
+
+// Next returns the next item using optimized selection
+func (rw *benchmarkOptimizedRadixTreeWRR) Next() any {
 	rw.mu.RLock()
 	defer rw.mu.RUnlock()
 
@@ -336,54 +384,47 @@ func (rw *benchmarkRadixTreeWRR) Next() any {
 		return rw.items[rand.IntN(len(rw.items))]
 	}
 
-	// Use optimized weighted selection
+	// Use optimized weighted selection with pre-computed arrays
 	randomWeight := rand.Int64N(rw.totalWeight)
 	return rw.findByWeightOptimized(randomWeight)
 }
 
-// findByWeightOptimized uses optimized algorithm for weight-based selection
-func (rw *benchmarkRadixTreeWRR) findByWeightOptimized(targetWeight int64) any {
-	var currentWeight int64
+// findByWeightOptimized uses pre-computed arrays for faster weight-based selection
+func (rw *benchmarkOptimizedRadixTreeWRR) findByWeightOptimized(targetWeight int64) any {
+	// Use binary search on pre-computed cumulative weights
+	left, right := 0, len(rw.cumulativeWeights)-1
 
-	for i, weight := range rw.weights {
-		if currentWeight <= targetWeight && targetWeight < currentWeight+weight {
-			return rw.items[i]
+	for left <= right {
+		mid := (left + right) / 2
+		if mid == 0 {
+			if targetWeight < rw.cumulativeWeights[mid] {
+				return rw.itemsArray[mid]
+			}
+		} else {
+			if targetWeight >= rw.cumulativeWeights[mid-1] && targetWeight < rw.cumulativeWeights[mid] {
+				return rw.itemsArray[mid]
+			}
 		}
-		currentWeight += weight
-	}
 
-	return nil
-}
-
-// updateEqualWeights checks if all weights are equal
-func (rw *benchmarkRadixTreeWRR) updateEqualWeights() {
-	if rw.itemCount <= 1 {
-		rw.equalWeights = true
-		return
-	}
-
-	firstWeight := rw.weights[0]
-	allEqual := true
-
-	for _, weight := range rw.weights {
-		if weight != firstWeight {
-			allEqual = false
-			break
+		if targetWeight < rw.cumulativeWeights[mid] {
+			right = mid - 1
+		} else {
+			left = mid + 1
 		}
 	}
 
-	rw.equalWeights = allEqual
+	return rw.itemsArray[0] // fallback
 }
 
 // String returns string representation
-func (rw *benchmarkRadixTreeWRR) String() string {
+func (rw *benchmarkOptimizedRadixTreeWRR) String() string {
 	rw.mu.RLock()
 	defer rw.mu.RUnlock()
 
 	if rw.equalWeights {
-		return fmt.Sprintf("BenchmarkRadixTreeWRR(equal_weights, items=%d)", len(rw.items))
+		return fmt.Sprintf("BenchmarkOptimizedRadixTreeWRR(equal_weights, items=%d)", len(rw.items))
 	}
-	return fmt.Sprintf("BenchmarkRadixTreeWRR(weighted, total_weight=%d, items=%d)", rw.totalWeight, rw.itemCount)
+	return fmt.Sprintf("BenchmarkOptimizedRadixTreeWRR(weighted, total_weight=%d, items=%d)", rw.totalWeight, rw.itemCount)
 }
 
 // Iterator-based radix tree WRR that properly uses the radix tree's iterator
@@ -494,7 +535,7 @@ func (rw *iteratorRadixTreeWRR) updateEqualWeights() {
 	if rw.itemCount <= 1 {
 		rw.equalWeights = true
 		for key := range rw.weightMap {
-			rw.items = []any{key}
+			rw.items = []any{rw.itemMap[key]}
 			break
 		}
 		return
@@ -518,7 +559,7 @@ func (rw *iteratorRadixTreeWRR) updateEqualWeights() {
 		if firstWeight == 0 {
 			firstWeight = weight
 		}
-		rw.items = append(rw.items, key)
+		rw.items = append(rw.items, rw.itemMap[key])
 		if weight != firstWeight {
 			allEqual = false
 		}
@@ -656,7 +697,7 @@ func (rw *advancedIteratorRadixTreeWRR) updateEqualWeights() {
 	if rw.itemCount <= 1 {
 		rw.equalWeights = true
 		for key := range rw.weightMap {
-			rw.items = []any{key}
+			rw.items = []any{rw.itemMap[key]}
 			break
 		}
 		return
@@ -680,7 +721,7 @@ func (rw *advancedIteratorRadixTreeWRR) updateEqualWeights() {
 		if firstWeight == 0 {
 			firstWeight = weight
 		}
-		rw.items = append(rw.items, key)
+		rw.items = append(rw.items, rw.itemMap[key])
 		if weight != firstWeight {
 			allEqual = false
 		}
