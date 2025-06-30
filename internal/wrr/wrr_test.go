@@ -136,6 +136,14 @@ func (s) TestBenchmarkRadixTreeWRRNext(t *testing.T) {
 	testWRRNext(t, NewBenchmarkRadixTreeWRR)
 }
 
+func (s) TestIteratorRadixTreeWRRNext(t *testing.T) {
+	testWRRNext(t, NewIteratorRadixTreeWRR)
+}
+
+func (s) TestAdvancedIteratorRadixTreeWRRNext(t *testing.T) {
+	testWRRNext(t, NewAdvancedIteratorRadixTreeWRR)
+}
+
 func BenchmarkRandomWRRNext(b *testing.B) {
 	for _, n := range []int{100, 500, 1000} {
 		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
