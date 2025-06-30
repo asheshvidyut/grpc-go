@@ -349,6 +349,8 @@ func BenchmarkComparison(b *testing.B) {
 		{"RadixTree", NewRadixTreeWRR},
 		{"EnhancedRadixTree", NewEnhancedRadixTreeWRR},
 		{"BenchmarkRadixTree", NewBenchmarkRadixTreeWRR},
+		{"IteratorRadixTree", NewIteratorRadixTreeWRR},
+		{"AdvancedIteratorRadixTree", NewAdvancedIteratorRadixTreeWRR},
 	}
 
 	sizes := []int{100, 500, 1000}
