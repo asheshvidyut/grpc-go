@@ -1,8 +1,11 @@
 module google.golang.org/grpc
 
-go 1.23.0
+go 1.24
+
+toolchain go1.24.4
 
 require (
+	github.com/asheshvidyut/prefix-search-optimized-radix v1.0.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443
 	github.com/envoyproxy/go-control-plane v0.13.4

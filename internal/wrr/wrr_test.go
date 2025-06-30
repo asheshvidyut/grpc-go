@@ -19,6 +19,7 @@ package wrr
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	rand "math/rand/v2"
 	"strconv"
@@ -123,6 +124,18 @@ func (s) TestEdfWrrNext(t *testing.T) {
 	testWRRNext(t, NewEDF)
 }
 
+func (s) TestRadixTreeWRRNext(t *testing.T) {
+	testWRRNext(t, NewRadixTreeWRR)
+}
+
+func (s) TestEnhancedRadixTreeWRRNext(t *testing.T) {
+	testWRRNext(t, NewEnhancedRadixTreeWRR)
+}
+
+func (s) TestBenchmarkRadixTreeWRRNext(t *testing.T) {
+	testWRRNext(t, NewBenchmarkRadixTreeWRR)
+}
+
 func BenchmarkRandomWRRNext(b *testing.B) {
 	for _, n := range []int{100, 500, 1000} {
 		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
@@ -166,6 +179,242 @@ func BenchmarkRandomWRRNext(b *testing.B) {
 	for _, heavyIndex := range heavyIndices {
 		b.Run("skew-weights-heavy-index-"+strconv.Itoa(heavyIndex), func(b *testing.B) {
 			w := NewRandom()
+			var sumOfWeights int64
+			for i := 0; i < itemsNum; i++ {
+				var weight int64
+				if i == heavyIndex {
+					weight = heavyWeight
+				} else {
+					weight = lightWeight
+				}
+				sumOfWeights += weight
+				w.Add(i, weight)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkRadixTreeWRRNext benchmarks the new radix tree WRR implementation
+func BenchmarkRadixTreeWRRNext(b *testing.B) {
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewRadixTreeWRR()
+			sumOfWeights := n
+			for i := 0; i < n; i++ {
+				w.Add(i, 1)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < sumOfWeights; i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	var maxWeight int64 = 1024
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("random-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewRadixTreeWRR()
+			var sumOfWeights int64
+			for i := 0; i < n; i++ {
+				weight := rand.Int64N(maxWeight + 1)
+				w.Add(i, weight)
+				sumOfWeights += weight
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	itemsNum := 200
+	heavyWeight := int64(itemsNum)
+	lightWeight := int64(1)
+	heavyIndices := []int{0, itemsNum / 2, itemsNum - 1}
+	for _, heavyIndex := range heavyIndices {
+		b.Run("skew-weights-heavy-index-"+strconv.Itoa(heavyIndex), func(b *testing.B) {
+			w := NewRadixTreeWRR()
+			var sumOfWeights int64
+			for i := 0; i < itemsNum; i++ {
+				var weight int64
+				if i == heavyIndex {
+					weight = heavyWeight
+				} else {
+					weight = lightWeight
+				}
+				sumOfWeights += weight
+				w.Add(i, weight)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEnhancedRadixTreeWRRNext benchmarks the enhanced radix tree WRR implementation
+func BenchmarkEnhancedRadixTreeWRRNext(b *testing.B) {
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewEnhancedRadixTreeWRR()
+			sumOfWeights := n
+			for i := 0; i < n; i++ {
+				w.Add(i, 1)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < sumOfWeights; i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	var maxWeight int64 = 1024
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("random-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewEnhancedRadixTreeWRR()
+			var sumOfWeights int64
+			for i := 0; i < n; i++ {
+				weight := rand.Int64N(maxWeight + 1)
+				w.Add(i, weight)
+				sumOfWeights += weight
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	itemsNum := 200
+	heavyWeight := int64(itemsNum)
+	lightWeight := int64(1)
+	heavyIndices := []int{0, itemsNum / 2, itemsNum - 1}
+	for _, heavyIndex := range heavyIndices {
+		b.Run("skew-weights-heavy-index-"+strconv.Itoa(heavyIndex), func(b *testing.B) {
+			w := NewEnhancedRadixTreeWRR()
+			var sumOfWeights int64
+			for i := 0; i < itemsNum; i++ {
+				var weight int64
+				if i == heavyIndex {
+					weight = heavyWeight
+				} else {
+					weight = lightWeight
+				}
+				sumOfWeights += weight
+				w.Add(i, weight)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkComparison compares all WRR implementations
+func BenchmarkComparison(b *testing.B) {
+	implementations := []struct {
+		name string
+		new  func() WRR
+	}{
+		{"Random", NewRandom},
+		{"EDF", NewEDF},
+		{"RadixTree", NewRadixTreeWRR},
+		{"EnhancedRadixTree", NewEnhancedRadixTreeWRR},
+		{"BenchmarkRadixTree", NewBenchmarkRadixTreeWRR},
+	}
+
+	sizes := []int{100, 500, 1000}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
+			for _, impl := range implementations {
+				b.Run(impl.name, func(b *testing.B) {
+					w := impl.new()
+
+					// Add items with random weights
+					var sumOfWeights int64
+					for i := 0; i < size; i++ {
+						weight := rand.Int64N(100) + 1
+						w.Add(i, weight)
+						sumOfWeights += weight
+					}
+
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						for j := 0; j < int(sumOfWeights); j++ {
+							w.Next()
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+// BenchmarkBenchmarkRadixTreeWRRNext benchmarks the optimized radix tree WRR implementation
+func BenchmarkBenchmarkRadixTreeWRRNext(b *testing.B) {
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewBenchmarkRadixTreeWRR()
+			sumOfWeights := n
+			for i := 0; i < n; i++ {
+				w.Add(i, 1)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < sumOfWeights; i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	var maxWeight int64 = 1024
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("random-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewBenchmarkRadixTreeWRR()
+			var sumOfWeights int64
+			for i := 0; i < n; i++ {
+				weight := rand.Int64N(maxWeight + 1)
+				w.Add(i, weight)
+				sumOfWeights += weight
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	itemsNum := 200
+	heavyWeight := int64(itemsNum)
+	lightWeight := int64(1)
+	heavyIndices := []int{0, itemsNum / 2, itemsNum - 1}
+	for _, heavyIndex := range heavyIndices {
+		b.Run("skew-weights-heavy-index-"+strconv.Itoa(heavyIndex), func(b *testing.B) {
+			w := NewBenchmarkRadixTreeWRR()
 			var sumOfWeights int64
 			for i := 0; i < itemsNum; i++ {
 				var weight int64

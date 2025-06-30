@@ -1,6 +1,8 @@
 module google.golang.org/grpc/interop/xds
 
-go 1.23.0
+go 1.24
+
+toolchain go1.24.4
 
 replace google.golang.org/grpc => ../..
 
