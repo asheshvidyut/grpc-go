@@ -15,12 +15,25 @@
  * limitations under the License.
  */
 
-package wrr
+package weightedrandom
 
 import (
 	"fmt"
 	rand "math/rand/v2"
+
+	"google.golang.org/grpc/internal/wrr"
 )
+
+// weightedItem is a wrapped weighted item that is used to implement weighted random algorithm.
+type weightedItem struct {
+	item              any
+	weight            int64
+	accumulatedWeight int64
+}
+
+func (w *weightedItem) String() string {
+	return fmt.Sprint(*w)
+}
 
 type aliasWRR struct {
 	items        []*weightedItem
@@ -29,7 +42,7 @@ type aliasWRR struct {
 	equalWeights bool
 }
 
-func NewAlias() WRR {
+func NewAlias() wrr.WRR {
 	return &aliasWRR{equalWeights: true}
 }
 

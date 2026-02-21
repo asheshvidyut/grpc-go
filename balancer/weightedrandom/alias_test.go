@@ -15,15 +15,20 @@
  * limitations under the License.
  */
 
-package wrr
+package weightedrandom
 
 import (
+	"errors"
+	"math"
 	rand "math/rand/v2"
 	"strconv"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/wrr"
 )
 
-func (s) TestAliasWRRNext(t *testing.T) {
+func TestAliasWRRNext(t *testing.T) {
 	testWRRNext(t, NewAlias)
 }
 
@@ -88,6 +93,87 @@ func BenchmarkAliasWRRNext(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				for i := 0; i < int(sumOfWeights); i++ {
 					w.Next()
+				}
+			}
+		})
+	}
+}
+
+// Helpers copied from internal/wrr/wrr_test.go
+
+const iterCount = 10000
+
+func equalApproximate(a, b float64) error {
+	opt := cmp.Comparer(func(x, y float64) bool {
+		delta := math.Abs(x - y)
+		mean := math.Abs(x+y) / 2.0
+		return delta/mean < 0.05
+	})
+	if !cmp.Equal(a, b, opt) {
+		return errors.New(cmp.Diff(a, b))
+	}
+	return nil
+}
+
+func testWRRNext(t *testing.T, newWRR func() wrr.WRR) {
+	tests := []struct {
+		name    string
+		weights []int64
+	}{
+		{
+			name:    "1-1-1",
+			weights: []int64{1, 1, 1},
+		},
+		{
+			name:    "1-2-3",
+			weights: []int64{1, 2, 3},
+		},
+		{
+			name:    "5-3-2",
+			weights: []int64{5, 3, 2},
+		},
+		{
+			name:    "17-23-37",
+			weights: []int64{17, 23, 37},
+		},
+		{
+			name:    "no items",
+			weights: []int64{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newWRR()
+			if len(tt.weights) == 0 {
+				if next := w.Next(); next != nil {
+					t.Fatalf("w.Next returns non nil value:%v when there is no item", next)
+				}
+				return
+			}
+
+			var sumOfWeights int64
+			for i, weight := range tt.weights {
+				w.Add(i, weight)
+				sumOfWeights += weight
+			}
+
+			results := make(map[int]int)
+			for i := 0; i < iterCount; i++ {
+				results[w.Next().(int)]++
+			}
+
+			wantRatio := make([]float64, len(tt.weights))
+			for i, weight := range tt.weights {
+				wantRatio[i] = float64(weight) / float64(sumOfWeights)
+			}
+			gotRatio := make([]float64, len(tt.weights))
+			for i, count := range results {
+				gotRatio[i] = float64(count) / iterCount
+			}
+
+			for i := range wantRatio {
+				if err := equalApproximate(gotRatio[i], wantRatio[i]); err != nil {
+					t.Errorf("%v not equal %v", i, err)
 				}
 			}
 		})

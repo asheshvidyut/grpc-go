@@ -40,7 +40,7 @@ func (b *pickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 		return base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 	}
 
-	w := wrr.NewAlias()
+	w := NewAlias()
 	for sc, scInfo := range info.ReadySCs {
 		w.Add(sc, GetWeight(scInfo.Address))
 	}
